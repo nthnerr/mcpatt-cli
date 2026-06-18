@@ -40,18 +40,10 @@ To use the proxy, update your MCP client configuration by injecting `mcpatt-cli`
 
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
-| `--name` | string | *Required* | Label for the target server. Used for terminal output and log naming.
-
- |
-| `--json-only` | boolean | `false` | Suppresses terminal output; writes the JSON log file only.
-
- |
-| `--no-file` | boolean | `false` | Suppresses the JSON file; prints to terminal only.
-
- |
-| `--truncate N` | integer | `500` | Terminal character truncation limit for large outputs.
-
- |
+| `--name` | string | *Required* | Label for the target server. Used for terminal output and log naming.|
+| `--json-only` | boolean | `false` | Suppresses terminal output; writes the JSON log file only.|
+| `--no-file` | boolean | `false` | Suppresses the JSON file; prints to terminal only.|
+| `--truncate N` | integer | `500` | Terminal character truncation limit for large outputs.|
 
 ---
 
