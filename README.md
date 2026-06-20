@@ -6,11 +6,7 @@ A transparent stdio proxy for MCP servers. It sits between an MCP client and a s
 
 MCP clients call tools on your behalf, sometimes dozens of times in a session, and you don't see any of it. You see the final answer. You don't see which file got read, what query hit your database, or whether a call quietly failed. If you installed a server from a GitHub gist or a Discord link, you have no idea what it's actually doing at runtime.
 
-<<<<<<< HEAD
 It doesn't change the protocol; it only makes the calls visible.
-=======
-This doesn't fix that. It just makes it visible.
->>>>>>> 636c240b0063cdcfaf2761acb26a5c4ede7e3f6a
 
 ## How it works
 
@@ -48,11 +44,7 @@ The extension and the CLI are the same underlying code. The extension just hardc
 mcpatt-cli --name <label> [options] -- <command> [args...]
 ```
 
-<<<<<<< HEAD
 Everything after `--` is passed to the wrapped server unchanged. mcpatt-cli flags go before it.
-=======
-Everything after `--` is the server you're wrapping, command and arguments, untouched. mcpatt-cli's own flags go before it.
->>>>>>> 636c240b0063cdcfaf2761acb26a5c4ede7e3f6a
 
 | Flag | Default | Does |
 |---|---|---|
@@ -61,7 +53,6 @@ Everything after `--` is the server you're wrapping, command and arguments, unto
 | `--no-file` | off | Skip the JSON file, terminal only |
 | `--json-only` | off | Skip terminal output, file only |
 | `--truncate <n>` | 500 | Characters shown per value before truncating in the terminal |
-<<<<<<< HEAD
 | `--redact <pattern>` | none | Redact matching text from logged input/output |
 
 `--no-file` and `--json-only` are mutually pointless together — if you pass both you get no output at all, which is allowed but not useful.
@@ -73,11 +64,6 @@ Everything after `--` is the server you're wrapping, command and arguments, unto
 - `mcpatt-cli replay <sessionLog> -- <command> [args...]` — replay logged tool calls against a fresh server.
 
 
-=======
-
-`--no-file` and `--json-only` are mutually pointless together — if you pass both you get no output at all, which is allowed but not useful.
-
->>>>>>> 636c240b0063cdcfaf2761acb26a5c4ede7e3f6a
 ## Output
 
 Terminal (stderr — see [why](#a-note-on-stderr) below):
@@ -123,7 +109,6 @@ All human-readable output goes to stderr, not stdout. stdout is the actual JSON-
 
 It only logs `tools/call`. Notifications, `resources/*`, `prompts/*` — all pass through the proxy fine, none of it shows up in the log. That's deliberate, not an oversight: tool calls are where the actual side effects happen, which is the thing this was built to make visible. If you need broader coverage, the parser is one file and the method check is one line — fork it.
 
-<<<<<<< HEAD
 Use `--redact` to replace matching text in the logged JSON and terminal output. The proxied protocol stream still passes through unchanged; redaction only affects what is stored and displayed.
 
 It assumes one server per process. If you're wrapping multiple servers, run mcpatt-cli separately for each.
@@ -131,15 +116,6 @@ It assumes one server per process. If you're wrapping multiple servers, run mcpa
 ## Requirements
 
 Node 18+. If you're wrapping a server launched with `npx`, that executable must be on PATH at runtime; the built bundle does not include wrapped commands.
-=======
-It doesn't redact anything. Full inputs and outputs land in the JSON file as-is. Don't point this at a server handling credentials or anything else you wouldn't want sitting in plaintext on disk.
-
-It assumes one server per process. If you're wrapping three servers, you run mcpatt-cli three times.
-
-## Requirements
-
-Node 18+. If you're wrapping something invoked via `npx` (the filesystem server, for instance), `npx` needs to be reachable on PATH at runtime — the bundled build doesn't vendor whatever you're wrapping.
->>>>>>> 636c240b0063cdcfaf2761acb26a5c4ede7e3f6a
 
 ## License
 
