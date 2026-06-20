@@ -1,99 +1,122 @@
-# mcpatt-cli 
+# mcpatt-cli
 
-`mcpatt-cli` [Model Context Protocol Audit Trail Tool - Command Line Interface] is a local stdio proxy for the Model Context Protocol (MCP). It intercepts bidirectional JSON-RPC 2.0 messages between an AI client and an MCP server, logging payloads to the terminal in real time and writing session histories to disk.
+A transparent stdio proxy for MCP servers. It sits between an MCP client and a server, forwards everything unchanged, and writes down what passed through: which tool got called, with what arguments, what came back, and how long it took.
 
----
+## Why
 
-## Distribution
+MCP clients call tools on your behalf, sometimes dozens of times in a session, and you don't see any of it. You see the final answer. You don't see which file got read, what query hit your database, or whether a call quietly failed. If you installed a server from a GitHub gist or a Discord link, you have no idea what it's actually doing at runtime.
 
-* **Current Version:** 1.0.24
-* **Format:** Claude `.mcpb` file bundle
+It doesn't change the protocol; it only makes the calls visible.
 
----
+## How it works
 
-## Configuration
-
-To use the proxy, update your MCP client configuration by injecting `mcpatt-cli` ahead of your target server command.
-
-```json
-{
-  "mcpServers": {
-    "filesystem": {
-      "command": "npx",
-      "args": [
-        "mcpatt-cli",
-        "--name", "filesystem",
-        "--",
-        "@modelcontextprotocol/server-filesystem", "/home/user"
-      ]
-    }
-  }
-}
-
+mcpatt-cli spawns the real server as a child process and pipes stdio through itself in both directions:
+```
+client  <-- stdio -->  mcpatt-cli  <-- stdio -->  real server
+|
++-- parses each JSON-RPC line, pairs requests
+with responses by id, logs the pair
 ```
 
----
+Neither side knows it's there. If you remove mcpatt-cli from the chain, nothing about the client or the server has to change.
 
-## Reference
+## Install
 
-### CLI Flags
+As a CLI tool, wrapping any local MCP server:
 
-| Flag | Type | Default | Description |
-| --- | --- | --- | --- |
-| `--name` | string | *Required* | Label for the target server. Used for terminal output and log naming.|
-| `--json-only` | boolean | `false` | Suppresses terminal output; writes the JSON log file only.|
-| `--no-file` | boolean | `false` | Suppresses the JSON file; prints to terminal only.|
-| `--truncate N` | integer | `500` | Terminal character truncation limit for large outputs.|
+```bash
+npm install -g mcpatt-cli
+```
 
----
+Or run it without installing:
 
-## Output Examples
+```bash
+npx mcpatt-cli --name <label> -- <server-command> [server-args...]
+```
 
-### Terminal Stream
+As a Claude Desktop extension, wrapping the official filesystem server specifically: grab the `.mcpb` from [Releases](https://github.com/nthnerr/mcpatt-cli/releases) and install it under Settings → Extensions → Advanced settings → Extension Developer. You'll be asked to pick which directories the filesystem server can touch and where the session log should go.
 
-Longer outputs are truncated locally to preserve readability.
+The extension and the CLI are the same underlying code. The extension just hardcodes which server it wraps and adds a config UI for the two things you'd otherwise pass as flags.
 
-```text
+## Usage
+
+```bash
+mcpatt-cli --name <label> [options] -- <command> [args...]
+```
+
+Everything after `--` is passed to the wrapped server unchanged. mcpatt-cli flags go before it.
+
+| Flag | Default | Does |
+|---|---|---|
+| `--name <name>` | *(required)* | Label for this server in logs and filenames |
+| `--log-dir <path>` | cwd | Where the JSON log gets written |
+| `--no-file` | off | Skip the JSON file, terminal only |
+| `--json-only` | off | Skip terminal output, file only |
+| `--truncate <n>` | 500 | Characters shown per value before truncating in the terminal |
+| `--redact <pattern>` | none | Redact matching text from logged input/output |
+
+`--no-file` and `--json-only` are mutually pointless together — if you pass both you get no output at all, which is allowed but not useful.
+
+## Additional commands
+
+- `mcpatt-cli diff <sessionA> <sessionB>` — compare two session logs and show what changed.
+- `mcpatt-cli tokens <sessionLog>` — estimate token usage for a recorded session.
+- `mcpatt-cli replay <sessionLog> -- <command> [args...]` — replay logged tool calls against a fresh server.
+
+
+## Output
+
+Terminal (stderr — see [why](#a-note-on-stderr) below):
+```
 ◆ MCPATT-CLI session started
-  Server  : filesystem
-  Log file: ./mcpatt-filesystem-1750197240.json
-
-→ [22:14:05] filesystem read_file
-  Input: { "path": "/home/user/src/index.ts" }
-
-← [22:14:05] filesystem read_file (143ms)
-  Output: "import { Server } from @modelcontextprotocol..." [+4821 chars truncated]
-
+Server  : filesystem
+Session : 1781679575
+Log file: ./mcpatt-filesystem-1781679575.json
+────────────────────────────────────────────────
+→ [3:45:12 PM] filesystem :: list_directory
+Input: {"path":"C:\Users\you\Temp"}
+← [3:45:12 PM] filesystem :: list_directory (5ms)
+Output: {"content":[...]} [+7632 chars truncated]
 ```
-
-### JSON Log File
-
-Stored as `./mcpatt-[name]-[timestamp].json`. Contains full, untruncated payloads paired by message identifier.
+JSON file, rewritten after every call (not just at session end — the process doesn't always get a clean shutdown):
 
 ```json
 {
-  "session_id": "1750197240",
+  "session_id": "1781679575",
   "server_name": "filesystem",
-  "started_at": "2026-06-17T22:14:00.000Z",
-  "ended_at": "2026-06-17T22:14:09.000Z",
-  "total_calls": 2,
+  "started_at": "2026-06-17T16:48:01.300Z",
+  "ended_at": "2026-06-17T16:48:35.094Z",
+  "total_calls": 1,
   "calls": [
     {
-      "id": 1,
-      "tool": "read_file",
-      "input": { "path": "/home/user/src/index.ts" },
-      "output": "import { Server } from \"@modelcontextprotocol/sdk/server/index.js\";\n...",
-      "duration_ms": 143,
-      "timestamp": "2026-06-17T22:14:05.123Z",
+      "id": 2,
+      "tool": "list_directory",
+      "input": { "path": "C:\\Users\\you\\Temp" },
+      "output": { "content": [ { "type": "text", "text": "..." } ] },
+      "duration_ms": 5,
+      "timestamp": "2026-06-17T16:48:35.094Z",
       "error": null
     }
   ]
 }
-
 ```
 
----
+#### A note on stderr
+
+All human-readable output goes to stderr, not stdout. stdout is the actual JSON-RPC channel between client and server — anything else written there corrupts the protocol stream. If you redirect mcpatt-cli's stdout, you get clean protocol traffic and nothing else. If you want the colored log, that's stderr.
+
+## What this doesn't do
+
+It only logs `tools/call`. Notifications, `resources/*`, `prompts/*` — all pass through the proxy fine, none of it shows up in the log. That's deliberate, not an oversight: tool calls are where the actual side effects happen, which is the thing this was built to make visible. If you need broader coverage, the parser is one file and the method check is one line — fork it.
+
+Use `--redact` to replace matching text in the logged JSON and terminal output. The proxied protocol stream still passes through unchanged; redaction only affects what is stored and displayed.
+
+It assumes one server per process. If you're wrapping multiple servers, run mcpatt-cli separately for each.
+
+## Requirements
+
+Node 18+. If you're wrapping a server launched with `npx`, that executable must be on PATH at runtime; the built bundle does not include wrapped commands.
 
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE).

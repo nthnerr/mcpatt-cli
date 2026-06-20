@@ -1,6 +1,6 @@
 {
   "name": "mcpatt-cli",
-  "version": "1.0.24",
+  "version": "1.1.32",
   "description": "Transparent audit-trail proxy for MCP (Model Context Protocol) traffic",
   "bin": {
     "mcpatt-cli": "./dist/index.js"

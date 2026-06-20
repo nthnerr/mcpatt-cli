@@ -1,6 +1,7 @@
 import chalk from "chalk";
 import { writeFileSync } from "node:fs";
 import type { CallRecord } from "./parser.js";
+import { redactValue } from "./redactor.js";
 
 export interface LoggerOptions {
   serverName: string;
@@ -8,6 +9,7 @@ export interface LoggerOptions {
   logFilePath: string | null; // null when --no-file is passed
   printToTerminal: boolean; // false when --json-only is passed
   truncateAt: number;
+  redactPatterns: RegExp[]; // empty when --redact was never passed
 }
 
 export class Logger {
@@ -21,10 +23,8 @@ export class Logger {
 
   sessionStart(): void {
     if (!this.opts.printToTerminal) return;
-    // All human-readable output goes to stderr, never stdout — stdout is
-    // reserved exclusively for forwarded JSON-RPC traffic between the AI
-    // client and the wrapped MCP server. Mixing the two would corrupt the
-    // protocol stream.
+    // stderr, not stdout — stdout carries the actual JSON-RPC protocol;
+    // anything else written there would corrupt the stream
     console.error(chalk.bold.cyan("◆ MCPATT-CLI session started"));
     console.error(`  ${chalk.dim("Server")}  : ${this.opts.serverName}`);
     console.error(`  ${chalk.dim("Session")} : ${this.opts.sessionId}`);
@@ -35,8 +35,20 @@ export class Logger {
   }
 
   recordCall(record: CallRecord): void {
-    this.calls.push(record);
-    if (this.opts.printToTerminal) this.printCall(record);
+    const safeRecord = this.applyRedaction(record);
+    this.calls.push(safeRecord);
+    if (this.opts.printToTerminal) this.printCall(safeRecord);
+    // flush on every call, not just at session end — a forceful kill
+    // (common on Windows) can skip the graceful shutdown path entirely,
+    // so this is the only flush actually guaranteed to run
+    this.flush();
+  }
+
+  private applyRedaction(record: CallRecord): CallRecord {
+    if (this.opts.redactPatterns.length === 0) return record;
+    const { value: input } = redactValue(record.input, this.opts.redactPatterns);
+    const { value: output } = redactValue(record.output, this.opts.redactPatterns);
+    return { ...record, input, output };
   }
 
   private printCall(record: CallRecord): void {
@@ -96,6 +108,9 @@ export class Logger {
       started_at: this.startedAt,
       ended_at: endedAt ?? new Date().toISOString(),
       total_calls: this.calls.length,
+      // recorded even when empty — so a reader can tell redaction was
+      // off, rather than assume nothing sensitive came up
+      redaction_patterns: this.opts.redactPatterns.map((p) => p.source),
       calls: this.calls,
     };
 

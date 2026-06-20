@@ -26,11 +26,6 @@ export class JsonRpcParser {
     this.onCallRecord = onCallRecord;
   }
 
-  /**
-   * Feed a single raw line of stdio traffic in. Direction tells us whether
-   * this line is a request heading to the MCP server, or a response/notification
-   * heading back to the AI client.
-   */
   handleLine(line: string, direction: Direction): void {
     const trimmed = line.trim();
     if (!trimmed) return;
@@ -39,8 +34,8 @@ export class JsonRpcParser {
     try {
       message = JSON.parse(trimmed);
     } catch {
-      // Malformed JSON is forwarded untouched by the proxy either way —
-      // we just can't log it as a structured call. Don't crash.
+      // proxy still forwards the raw line either way — we just have
+      // nothing structured to log it as
       return;
     }
 
@@ -52,8 +47,11 @@ export class JsonRpcParser {
   }
 
   private handleRequest(message: any): void {
-    if (message.id === undefined || message.id === null) return; // notification
-    if (message.method !== "tools/call") return; // V1 only audits tool invocations
+    // no id means no response is coming, so there's nothing to pair later
+    if (message.id === undefined || message.id === null) return;
+    // only tool calls produce side effects worth auditing — everything
+    // else (resources, prompts, notifications) passes through unlogged
+    if (message.method !== "tools/call") return;
 
     this.pending.set(message.id, {
       toolName: message.params?.name ?? "unknown",
@@ -66,7 +64,8 @@ export class JsonRpcParser {
     if (message.id === undefined || message.id === null) return;
 
     const call = this.pending.get(message.id);
-    if (!call) return; // response to something we weren't tracking
+    // nothing pending under this id — ignore rather than guess at a pairing
+    if (!call) return;
 
     this.pending.delete(message.id);
 
